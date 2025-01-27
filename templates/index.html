@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Conferencing</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: rgb(255,255,255);
+            background: linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(181,235,232,1) 100%);
+            color: #333;
+        }
+
+        #roomIdDisplay {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #444;
+        }
+
+        .join-room-container {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+            width: 90%;
+            max-width: 500px;
+            animation: slideIn 0.8s ease-in-out;
+        }
+
+        .join-room-container h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: #444;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            text-align: center;
+            margin: 10px 0 20px 0; /* Marge au-dessus et au-dessous */
+            color: #444;
+        }
+
+        #conference h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            color: #555;
+        }
+
+        #conference {
+            margin-top: 40px; /* Crée un espace entre le titre et la section principale */
+        }
+
+        .form-label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        input {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(200, 200, 200, 0.8);
+            color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+        }
+
+        input::placeholder {
+            color: #999;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #a8edea;
+            box-shadow: 0 0 8px #a8edea;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+
+        .btn-primary {
+            background: #57c1eb;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #46a5d1;
+        }
+
+        .btn-success {
+            background: #88d9a8;
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #6bc78a;
+        }
+
+        .btn-secondary {
+            background: #bbbbbb;
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #a1a1a1;
+        }
+
+
+        #videoContainer {
+            display: flex;
+            gap: 20px;
+            height: 400px;
+        }
+
+        canvas, video {
+            background-color: #000;
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        #chatContainer {
+            border: 1px solid #ddd;
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: auto;
+            max-height: 400px;
+        }
+
+        #chatBox {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: #f9f9f9;
+        }
+
+        .chat-message {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .chat-message.self {
+            align-items: flex-end;
+        }
+
+        .chat-bubble {
+            background-color: #e4f1f1;
+            padding: 12px 18px;
+            border-radius: 15px;
+            font-size: 14px;
+            max-width: 80%;
+            word-wrap: break-word;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-message.self .chat-bubble {
+            background-color: #57c1eb;
+            color: #fff;
+        }
+
+        .chat-message .chat-name {
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 3px;
+            align-self: flex-start;
+        }
+
+        .chat-message.self .chat-name {
+            align-self: flex-end;
+            color: #57c1eb;
+        }
+
+        #chatInputContainer {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            border-top: 1px solid #ccc;
+            background-color: #fff;
+        }
+
+        #chatInput {
+            flex-grow: 1;
+            padding: 12px;
+            font-size: 1rem;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            outline: none;
+            transition: box-shadow 0.3s ease;
+        }
+
+        #chatInput:focus {
+            outline: none;
+            border: 1px solid #57c1eb;
+            box-shadow: 0 0 5px rgba(87, 193, 235, 0.5);
+        }
+
+        #sendButton {
+            padding: 10px 15px;
+            background: #57c1eb;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.3s ease, background 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        #sendButton:hover {
+            background: #46a5d1;
+            transform: scale(1.05);
+        }
+
+        .buttons {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .buttons button {
+            padding: 10px 15px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            transition: transform 0.2s ease, background-color 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-warning {
+            background-color: #ffc107;
+            color: #333;
+        }
+
+        .btn-warning:hover {
+            background-color: #e0a800;
+            transform: scale(1.05);
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+            transform: scale(1.05);
+        }
+
+        @keyframes scaleUp {
+            from {
+                transform: scale(0.9);
+                opacity: 0.8;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .chat-message {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="container py-3">
+            <h1>Video Conferencing</h1>
+        </div>
+        <div class="container join-room-container py-5">
+            <div id="roomControls" class="mb-4">
+                <div class="mb-3">
+                    <label for="roomIdInput" class="form-label">Room ID</label>
+                    <input type="text" id="roomIdInput" class="form-control" placeholder="Enter Room ID">
+                </div>
+                <div class="mb-3">
+                    <label for="nameInput" class="form-label">Your Name</label>
+                    <input type="text" id="nameInput" class="form-control" placeholder="Enter Your Name">
+                </div>
+                <button class="btn btn-primary" onclick="createRoom()">Create Room</button>
+                <button class="btn btn-success" onclick="joinRoom()">Join Room</button>
+            </div>
+        </div>
+
+        <div id="conference" class="d-none">
+            <h3 id="roomIdDisplay">Room: </h3>
+            <div id="videoContainer">
+                <div id="localVideoContainer" class="col-md-6">
+                    <video id="localVideo" autoplay muted></video>
+                </div>
+                <div id="remoteVideoContainer" class="col-md-6 hidden">
+                    <canvas id="remoteVideo"></canvas>
+                </div>
+                <div class="col-md-4" id="chatContainer">
+                    <h5>Chat</h5>
+                    <div id="chatBox"></div>
+                    <div id="chatInputContainer">
+                        <input type="text" id="chatInput" placeholder="Type a message">
+                        <button id="sendButton" onclick="sendMessage()">Send</button>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <button class="btn btn-warning" onclick="toggleCamera()">
+                    <i class="fas fa-video"></i> Toggle Camera
+                </button>
+                <button class="btn btn-secondary" onclick="leaveRoom()">
+                    <i class="fas fa-sign-out-alt"></i> Leave Room
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let roomId = '';
+        let localStream = null;
+        let isHost = false;
+        let nom ="";
+        function createRoom() {
+            const name = document.getElementById('nameInput').value;
+            nom=name;
+            if (!name) {
+                alert('Please enter your name.');
+                return;
+            }
+            socket.emit('create_room', { name });
+            socket.on('room_created', (data) => {
+                roomId = data.room_id;
+                isHost = true;
+
+                // Masquer le conteneur `join-room-container`
+                document.querySelector('.join-room-container').classList.add('hidden');
+
+                joinRoomDirect(name, roomId);
+            });
+        }
+
+        function joinRoom() {
+            const name = document.getElementById('nameInput').value;
+            nom=name;
+            roomId = document.getElementById('roomIdInput').value;
+
+            if (!name || !roomId) {
+                alert('Please enter both Room ID and Name.');
+                return;
+            }
+
+            joinRoomDirect(name, roomId);
+        }
+
+        function joinRoomDirect(name, roomId) {
+            socket.emit('join_room', { room_id: roomId, name });
+            socket.on('joined_room', () => {
+                // Masquer le conteneur `join-room-container`
+                document.querySelector('.join-room-container').classList.add('hidden');
+                document.getElementById('conference').classList.remove('d-none');
+                document.getElementById('roomIdDisplay').innerText = `Room: ${roomId}`;
+            });
+
+            // Hide remote video if not the host
+            if (!isHost) {
+                document.getElementById('remoteVideoContainer').classList.remove('hidden');
+                document.getElementById('localVideoContainer').classList.add('hidden');
+                const toggleCameraButton = document.querySelector('.btn.btn-warning');
+        if (toggleCameraButton) {
+            toggleCameraButton.style.display = 'none';
+        }
+            } else {
+                document.getElementById('remoteVideoContainer').classList.add('hidden');
+            }
+        }
+
+        socket.on('video_frame', (data) => {
+            const img = new Image();
+            const canvas = document.getElementById('remoteVideo');
+            const ctx = canvas.getContext('2d');
+            img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            img.src = 'data:image/jpeg;base64,' + data.frame;
+        });
+
+        async function toggleCamera() {
+            if (!isHost) return;
+            if (!localStream) {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const video = document.getElementById('localVideo');
+                video.srcObject = localStream;
+
+                const videoTrack = localStream.getVideoTracks()[0];
+                videoTrack.onended = () => localStream = null;
+
+                localStream.getVideoTracks()[0].enabled = true;
+
+                setInterval(() => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    socket.emit('video_frame', {
+                        room_id: roomId,
+                        frame: canvas.toDataURL('image/jpeg', 0.5).split(',')[1],
+                    });
+                }, 100);
+            } else {
+                localStream.getVideoTracks()[0].enabled = !localStream.getVideoTracks()[0].enabled;
+            }
+        }
+
+        // Lors de l'envoi d'un message
+        function sendMessage() {
+            const message = document.getElementById('chatInput').value.trim();
+            if (!message) return;
+
+            // Envoyer le message au serveur
+            socket.emit('send_message', { room_id: roomId, message, name: nom });
+
+            // Effacer l'entrée après l'envoi
+            document.getElementById('chatInput').value = '';
+        }
+
+        // Lors de la réception d'un message
+        socket.on('receive_message', (data) => {
+            // Ajouter le message reçu (provenant du serveur) au chat
+            addChatMessage(data.name, data.message, data.name === nom);
+        });
+
+        // Lors de la réception des messages précédents
+        socket.on('previous_messages', (messages) => {
+            messages.forEach((message) => {
+                addChatMessage(message.name, message.message, false);
+            });
+        });
+        
+        function addChatMessage(name, message, isSelf = false) {
+            const chatBox = document.getElementById('chatBox');
+
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('chat-message');
+            if (isSelf) {
+                messageElement.classList.add('self');
+            }
+
+            const nameElement = document.createElement('span');
+            nameElement.classList.add('chat-name');
+            nameElement.textContent = name;
+
+            const bubbleElement = document.createElement('div');
+            bubbleElement.classList.add('chat-bubble');
+            bubbleElement.textContent = message;
+
+            messageElement.appendChild(nameElement);
+            messageElement.appendChild(bubbleElement);
+            chatBox.appendChild(messageElement);
+
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function leaveRoom() {
+            socket.emit('leave_room', { room_id: roomId });
+            roomId = ''; // Réinitialisation de roomId
+            document.getElementById('chatBox').innerHTML = '';
+            document.getElementById('conference').classList.add('d-none');
+            document.querySelector('.join-room-container').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
